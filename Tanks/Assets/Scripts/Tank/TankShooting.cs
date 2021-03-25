@@ -26,7 +26,7 @@ public class TankShooting : NetworkBehaviour
     private void OnEnable()
     {
         m_CurrentLaunchForce = m_MinLaunchForce;
-        m_AimSlider.value = m_MinLaunchForce;
+        // m_AimSlider.value = m_MinLaunchForce;
     }
 
 
@@ -64,6 +64,10 @@ public class TankShooting : NetworkBehaviour
             {
                 Fire();
             }
+        }
+        else
+        {
+            m_AimSlider.value = 1;
         }
     }
 

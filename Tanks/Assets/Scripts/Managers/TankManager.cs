@@ -4,8 +4,8 @@ using UnityEngine;
 [Serializable]
 public class TankManager
 {
-    public Color m_PlayerColor;            
-    public Transform m_SpawnPoint;         
+    public Color m_PlayerColor;
+    public Vector3 m_SpawnPoint;
     public int m_PlayerNumber;             
     public string m_ColoredPlayerText;
     public GameObject m_Instance;          
@@ -16,6 +16,23 @@ public class TankManager
     private TankShooting m_Shooting;
     private GameObject m_CanvasGameObject;
 
+    public TankManager()
+    {
+        m_PlayerColor = new Color();
+        m_SpawnPoint = Vector3.zero;
+        m_ColoredPlayerText = "name";
+        m_Instance = null;
+        m_Wins = 0;
+    }
+
+    public TankManager(Color color, Vector3 spawnPoint, string name, GameObject instance)
+    {
+        m_PlayerColor = color;
+        m_SpawnPoint = spawnPoint;
+        m_ColoredPlayerText = name;
+        m_Instance = instance;
+        m_Wins = 0;
+    }
 
     public void Setup()
     {
@@ -57,8 +74,7 @@ public class TankManager
 
     public void Reset()
     {
-        m_Instance.transform.position = m_SpawnPoint.position;
-        m_Instance.transform.rotation = m_SpawnPoint.rotation;
+        m_Instance.transform.position = m_SpawnPoint;
 
         m_Instance.SetActive(false);
         m_Instance.SetActive(true);

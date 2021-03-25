@@ -41,6 +41,12 @@ public class ShellExplosion : NetworkBehaviour
             targetHealth.TakeDamage(damage);
         }
 
+        PlayShellExplosion();
+    }
+
+    [ClientRpc]
+    private void PlayShellExplosion()
+    {
         m_ExplosionParticles.transform.parent = null;
         m_ExplosionParticles.Play();
         m_ExplosionAudio.Play();

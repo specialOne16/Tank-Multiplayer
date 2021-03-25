@@ -17,6 +17,7 @@ public class TankMovement : NetworkBehaviour
     private float m_MovementInputValue;    
     private float m_TurnInputValue;        
     private float m_OriginalPitch;
+    public TankManager manager;
 
     private void Awake()
     {
@@ -48,6 +49,10 @@ public class TankMovement : NetworkBehaviour
         if (isLocalPlayer)
         {
             GameObject.Find("CameraRig").GetComponent<PersonalizedCameraControl>().setTarget(gameObject);
+            Color playerColor = new Color(Random.Range(0f, 1f),Random.Range(0f, 1f),Random.Range(0f, 1f));
+            manager = new TankManager(playerColor, new Vector3(Random.Range(-10,10),0,Random.Range(-10,0)), "Jundu", gameObject);
+            GameManager gameManager = GameObject.Find("GameManager").GetComponent<GameManager>();
+            gameManager.AddNewPlayer(manager);
         }
     }
 

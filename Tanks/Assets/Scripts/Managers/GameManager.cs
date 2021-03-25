@@ -1,23 +1,26 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using Mirror;
 
-public class GameManager : MonoBehaviour
+public class GameManager : NetworkBehaviour
 {
     public int m_NumRoundsToWin = 5;        
     public float m_StartDelay = 3f;         
-    public float m_EndDelay = 3f;           
-    public CameraControl m_CameraControl;   
-    public Text m_MessageText;              
-    public GameObject m_TankPrefab;         
-    public TankManager[] m_Tanks;           
+    public float m_EndDelay = 3f;
+    public Text m_MessageText;
+    public List<TankManager> m_Tanks;
+    public TankManager manager;
 
 
     private int m_RoundNumber;              
     private WaitForSeconds m_StartWait;     
-    private WaitForSeconds m_EndWait;       
+    private WaitForSeconds m_EndWait;  
+    [SyncVar]
     private TankManager m_RoundWinner;
+    [SyncVar]
     private TankManager m_GameWinner;       
 
 
@@ -26,37 +29,23 @@ public class GameManager : MonoBehaviour
         m_StartWait = new WaitForSeconds(m_StartDelay);
         m_EndWait = new WaitForSeconds(m_EndDelay);
 
-        SpawnAllTanks();
-        SetCameraTargets();
+        StartGame();
+    }
 
+    [Command(requiresAuthority = false)]
+    public void AddNewPlayer(TankManager newPlayer)
+    {
+        m_Tanks.Add(newPlayer);
+        m_Tanks[m_Tanks.Count - 1].m_PlayerNumber = m_Tanks.Count;
+        m_Tanks[m_Tanks.Count - 1].Setup();
+        SharePlayer(m_Tanks);
+    }
+
+    [Server]
+    public void StartGame()
+    {
         StartCoroutine(GameLoop());
     }
-
-
-    private void SpawnAllTanks()
-    {
-        for (int i = 0; i < m_Tanks.Length; i++)
-        {
-            m_Tanks[i].m_Instance =
-                Instantiate(m_TankPrefab, m_Tanks[i].m_SpawnPoint.position, m_Tanks[i].m_SpawnPoint.rotation) as GameObject;
-            m_Tanks[i].m_PlayerNumber = i + 1;
-            m_Tanks[i].Setup();
-        }
-    }
-
-
-    private void SetCameraTargets()
-    {
-        Transform[] targets = new Transform[m_Tanks.Length];
-
-        for (int i = 0; i < targets.Length; i++)
-        {
-            targets[i] = m_Tanks[i].m_Instance.transform;
-        }
-
-        m_CameraControl.m_Targets = targets;
-    }
-
 
     private IEnumerator GameLoop()
     {
@@ -66,7 +55,7 @@ public class GameManager : MonoBehaviour
 
         if (m_GameWinner != null)
         {
-            SceneManager.LoadScene(0);
+            EndGame();
         }
         else
         {
@@ -74,24 +63,33 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    [ClientRpc]
+    private void EndGame()
+    {
+        SceneManager.LoadScene(0);
+    }
 
     private IEnumerator RoundStarting()
     {
         ResetAllTanks();
         DisableTankControl();
-        m_CameraControl.SetStartPositionAndSize();
 
         m_RoundNumber++;
-        m_MessageText.text = "ROUND " + m_RoundNumber;
+        RefreshText("ROUND " + m_RoundNumber);
 
-        yield return m_StartWait;
+        while (!MoreThanOneTankLeft())
+        {
+            yield return null;
+        }
+
+        yield return new WaitForSeconds(3f);
     }
 
 
     private IEnumerator RoundPlaying()
     {
         EnableTankControl();
-        m_MessageText.text = string.Empty;
+        RefreshText(string.Empty);
 
         while (!OneTankLeft())
         {
@@ -114,7 +112,7 @@ public class GameManager : MonoBehaviour
         m_GameWinner = GetGameWinner();
 
         string message = EndMessage();
-        m_MessageText.text = message;
+        RefreshText(message);
 
         yield return m_EndWait;
     }
@@ -124,7 +122,7 @@ public class GameManager : MonoBehaviour
     {
         int numTanksLeft = 0;
 
-        for (int i = 0; i < m_Tanks.Length; i++)
+        for (int i = 0; i < m_Tanks.Count; i++)
         {
             if (m_Tanks[i].m_Instance.activeSelf)
                 numTanksLeft++;
@@ -132,11 +130,23 @@ public class GameManager : MonoBehaviour
 
         return numTanksLeft <= 1;
     }
+    private bool MoreThanOneTankLeft()
+    {
+        int numTanksLeft = 0;
+
+        for (int i = 0; i < m_Tanks.Count; i++)
+        {
+            if (m_Tanks[i].m_Instance.activeSelf)
+                numTanksLeft++;
+        }
+
+        return numTanksLeft > 1;
+    }
 
 
     private TankManager GetRoundWinner()
     {
-        for (int i = 0; i < m_Tanks.Length; i++)
+        for (int i = 0; i < m_Tanks.Count; i++)
         {
             if (m_Tanks[i].m_Instance.activeSelf)
                 return m_Tanks[i];
@@ -148,7 +158,7 @@ public class GameManager : MonoBehaviour
 
     private TankManager GetGameWinner()
     {
-        for (int i = 0; i < m_Tanks.Length; i++)
+        for (int i = 0; i < m_Tanks.Count; i++)
         {
             if (m_Tanks[i].m_Wins == m_NumRoundsToWin)
                 return m_Tanks[i];
@@ -167,7 +177,7 @@ public class GameManager : MonoBehaviour
 
         message += "\n\n\n\n";
 
-        for (int i = 0; i < m_Tanks.Length; i++)
+        for (int i = 0; i < m_Tanks.Count; i++)
         {
             message += m_Tanks[i].m_ColoredPlayerText + ": " + m_Tanks[i].m_Wins + " WINS\n";
         }
@@ -178,30 +188,48 @@ public class GameManager : MonoBehaviour
         return message;
     }
 
+    [ClientRpc]
+    private void RefreshText(string message)
+    {
+        m_MessageText.text = message;
+    }
 
+    [ClientRpc]
+    private void SharePlayer(List<TankManager> playerList)
+    {
+        m_Tanks = playerList;
+        for (int i = 0; i < m_Tanks.Count; i++)
+        {
+            m_Tanks[i].Setup();
+        }
+    }
+
+    [ClientRpc]
     private void ResetAllTanks()
     {
-        for (int i = 0; i < m_Tanks.Length; i++)
+        for (int i = 0; i < m_Tanks.Count; i++)
         {
             m_Tanks[i].Reset();
         }
     }
 
-
+    [ClientRpc]
     private void EnableTankControl()
     {
-        for (int i = 0; i < m_Tanks.Length; i++)
+        for (int i = 0; i < m_Tanks.Count; i++)
         {
             m_Tanks[i].EnableControl();
         }
     }
 
-
+    [ClientRpc]
     private void DisableTankControl()
     {
-        for (int i = 0; i < m_Tanks.Length; i++)
+        for (int i = 0; i < m_Tanks.Count; i++)
         {
             m_Tanks[i].DisableControl();
         }
     }
+    
+
 }
